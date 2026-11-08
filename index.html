@@ -674,7 +674,7 @@ function itemHTML(it, st, o = {}) {
   let stamp = '';
   if (showRes) {
     const cls = total >= max ? 'ok' : total > 0 ? 'part' : 'bad';
-    const word = it.subs ? '得分' : (cls === 'ok' ? '答对' : cls === 'part' ? '少选' : '答错');
+    const word = st.giveup ? '不会' : it.subs ? '得分' : (cls === 'ok' ? '答对' : cls === 'part' ? '少选' : '答错');
     stamp = `<div class="stamp ${cls}" aria-label="${word} ${fmtPts(total)} 分"><span>${word}</span><b>${fmtPts(total)}${it.subs ? '/' + max : ''}</b></div>`;
   }
   const meta = `<div class="q-meta">
@@ -689,6 +689,7 @@ function itemHTML(it, st, o = {}) {
   let actions = '';
   if (mode === 'practice' && !st.done) {
     actions = `<div class="q-actions"><button type="button" class="btn primary" data-act="submit" data-id="${it.id}">提交答案</button>
+      <button type="button" class="btn" data-act="giveup" data-id="${it.id}">不会</button>
       <span class="q-hint">${it.subs ? '每小题都选完再提交' : kindOf(it, 0) === 'multi' ? '多选：错选不得分，少选每个选项 0.5 分' : '键盘 A–D 选择，回车提交'}</span></div>`;
   }
   let res = '';
@@ -708,7 +709,7 @@ function partHTML(it, i, st, g, o) {
   let r = '';
   if (g) {
     const cls = g.status === 'ok' ? 'ok' : g.status === 'part' ? 'part' : 'bad';
-    const word = g.status === 'ok' ? '正确' : g.status === 'part' ? '少选' : g.status === 'blank' ? '未作答' : '错误';
+    const word = st.giveup ? '不会' : g.status === 'ok' ? '正确' : g.status === 'part' ? '少选' : g.status === 'blank' ? '未作答' : '错误';
     r = `<div class="res"><div class="ans-line">正确答案 <b class="ok">${esc(p.ans)}</b>　你的答案 <b class="${cls}">${esc(pick || '—')}</b>　<span class="${cls}">${word} ${fmtPts(g.pts)} 分</span></div>
       ${p.exp ? `<div class="exp">${md(p.exp)}</div>` : ''}</div>`;
   }
@@ -1185,6 +1186,19 @@ function submit(id) {
   if (S.view === 'practice' && S.practice && S.practice.ids[S.practice.i] === id) render();
   else rerenderItem(id);
 }
+// 「不会」：整道题按做错记录（每个小题都记错），进错题本，然后直接看答案和知识点
+function giveUp(id) {
+  const it = findItem(id), st = ST[id] = ST[id] || { picks: {}, done: false };
+  if (!it || st.done) return;
+  st.picks = {}; st.done = true; st.giveup = true;
+  if (!it.ai) {
+    let max = 0;
+    keysOf(it).forEach(k => { const m = maxPts(it); max += m; record(S.sub, k, { pts: 0, max: m, status: 'bad' }); });
+    if (S.practice && S.practice.ids.includes(id)) S.practice.max += max;
+  }
+  if (S.view === 'practice' && S.practice && S.practice.ids[S.practice.i] === id) render();
+  else rerenderItem(id);
+}
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-act]'); if (!t) return;
   const a = t.dataset.act, id = t.dataset.id;
@@ -1194,6 +1208,7 @@ document.addEventListener('click', e => {
     case 'go': go(t.dataset.view); break;
     case 'pick': pick(id, +t.dataset.i, t.dataset.k); break;
     case 'submit': submit(id); break;
+    case 'giveup': giveUp(id); break;
     case 'next': if (S.practice) { S.practice.i++; render(); window.scrollTo(0, 0); } break;
     case 'prev': if (S.practice && S.practice.i > 0) { S.practice.i--; render(); window.scrollTo(0, 0); } break;
     case 'endsess': if (S.practice) { S.practice.i = S.practice.ids.length; render(); } break;
